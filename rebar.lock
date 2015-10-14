@@ -1,0 +1,4 @@
+[{<<"pgsql">>,
+  {git,"https://github.com/semiocast/pgsql.git",
+       {ref,"e40786b5c3e76dcfe502cbad702ed1b5e50b616e"}},
+  0}].

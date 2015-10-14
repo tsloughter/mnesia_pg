@@ -16,14 +16,14 @@
 %%% specific language governing permissions and limitations
 %%% under the License.
 
--record(conf, {status,
-               was_running = false,
-	       bin,
-	       dir,
-	       host = "localhost",
-	       port = 5432,
-	       user = "mnesia",
+-record(conf, {status=running,
+               was_running = true,
+               bin,
+               dir,
+               host = "localhost",
+               port = 5432,
+               user = "mnesia",
                password = "",
                pool_size = 10,
-	       db = "mnesia",
+               db = "mnesia",
                tablespace}).

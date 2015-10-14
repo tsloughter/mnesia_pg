@@ -1,5 +1,5 @@
-pgsql_src
-pgsql
+_build
+erln8.config
 ebin
 *~
 MnesiaCore*

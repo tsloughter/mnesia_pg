@@ -9,5 +9,5 @@
                  ]},
   {mod, {mnesia_pg_app, []}},
   {start_phases, [{check_schema_cookie,[]}]},
-  {env, [{pool_size, 3}, {pg_user, "mnesia"}, {pg_pwd, "mnesia"}]}
+  {env, [{pool_size, 3}, {pg_port, 5432}, {pg_user, "mnesia"}, {pg_pwd, "mnesia"}]}
  ]}.

@@ -22,7 +22,7 @@
 -export([alloc/1, free/1, ref/0, state/0]).
 -export([check_schema_cookie/0]).
 -export([init/1, handle_call/3, handle_cast/2,
-	 handle_info/2, code_change/3, terminate/2]).
+         handle_info/2, code_change/3, terminate/2]).
 
 -include("mnesia_pg_int.hrl").
 
@@ -31,34 +31,35 @@ start_link() ->
     gen_server:start_link({local, conn_pool}, ?MODULE, Conf, []).
 
 open_connections(#conf{pool_size = N,
-		       host = Host,
-		       port = Port,
-		       user = User,
-		       password = Pwd,
-		       db = Db}) ->
+                       host = Host,
+                       port = Port,
+                       user = User,
+                       password = Pwd,
+                       db = Db}) ->
     L = lists:seq(1, N),			% N connections
     ConnL = lists:map(
-	      fun(_) ->
-		      {ok, C} = pgsql:connect(Host, User, Pwd,
-					      [{database, Db},
-					       {port, Port}]),
-		      C
-	      end, L),
+              fun(_) ->
+                      C = {pgsql_connection, _} = pgsql_connection:open(
+                                                    [{database, Db},
+                                                     {host, Host}, {user, User}, {password, Pwd},
+                                                     {port, Port}]),
+                      C
+              end, L),
     ConnL.
 
 alloc(Tab) ->
     C = gen_server:call(conn_pool, {alloc, self()}),
     case (C) of
-	wait ->
-	    receive
-		{new_conn, C2} ->
-		    C2
-	    after 1000 ->
-		    io:fwrite("ERR: failed to allocate PG connection for table ~p~n", [Tab]),
-		    void			% mnesia abort?
-	    end;
-	_ ->
-	    C
+        wait ->
+            receive
+                {new_conn, C2} ->
+                    C2
+            after 1000 ->
+                    io:fwrite("ERR: failed to allocate PG connection for table ~p~n", [Tab]),
+                    void			% mnesia abort?
+            end;
+        _ ->
+            C
     end.
 
 free(Conn) ->
@@ -76,19 +77,19 @@ check_schema_cookie() ->
 init(Conf) ->
     ConnL = open_connections(Conf),
     io:fwrite("Connection opened~n", []),
-    %% check_schema_cookie(ConnL),
+    %%check_schema_cookie(ConnL),
     process_flag(trap_exit, true),
-    {A1,A2,A3} = now(),
+    {A1,A2,A3} = os:timestamp(),
     random:seed(A1, A2, A3),
     {ok, {ConnL, []}}.
 
 terminate(_, {ConnL, _}) ->
     lists:foreach(fun(C) ->
-			  try pgsql:close(C)
-			  catch
-			      _:_ -> ok
-			  end
-		  end, ConnL).
+                          try pgsql_connection:close(C)
+                          catch
+                              _:_ -> ok
+                          end
+                  end, ConnL).
 
 handle_call(get_ref, _From, State) ->
     {reply, random:uniform(100000000), State};
@@ -122,65 +123,65 @@ check_schema_cookie([H|_]) ->
 do_check_schema_cookie(H) ->
     MyCookie = mnesia_lib:val({schema, cookie}),
     SQL = "select erlval from schema where erlkey='cookie'",
-    Res = pgsql:equery(H, SQL, []),
+    Res = pgsql_connection:simple_query(SQL, H),
     io:fwrite("schema query: ~p~n", [Res]),
     case Res of
-	{error,{error,error,<<"42P01">>,_,_}} ->
-	    %% schema doesn't exist
-	    io:fwrite("schema doesn't exist~n", []),
-	    CreateRes = sql_create_schema(H),
-	    io:fwrite("CreateRes = ~p~n", [CreateRes]),
-	    insert_cookie(H, MyCookie);
-	{ok, _, []} ->
-	    %% No cookie
-	    io:fwrite("No cookie~n", []),
-	    insert_cookie(H, MyCookie),
-	    ok;
-	{ok, [{column,<<"erlval">>,bytea,_,_,_}],[{Bin}]} = Res ->
-	    io:fwrite("Res = ~p~n", [Res]),
-	    try binary_to_term(Bin) of
-		MyCookie ->
-		    io:fwrite("Cookies match!~n", []),
-		    ok;
-		WrongCookie ->
-		    {error,
-		     {schema_cookie_mismatch,{WrongCookie,MyCookie}}}
-	    catch
-		error:_ ->
-		    error(cannot_decode_cookie)
-	    end
+        {error, {pgsql_error, [_, {code, <<"42P01">>} | _]}} ->
+            %% schema doesn't exist
+            io:fwrite("schema doesn't exist~n", []),
+            CreateRes = sql_create_schema(H),
+            io:fwrite("CreateRes = ~p~n", [CreateRes]),
+            insert_cookie(H, MyCookie);
+        {ok, _, []} ->
+            %% No cookie
+            io:fwrite("No cookie~n", []),
+            insert_cookie(H, MyCookie),
+            ok;
+        {{select, 1}, [{Bin}]} ->
+            io:fwrite("Res = ~p~n", [Bin]),
+            try binary_to_term(Bin) of
+                MyCookie ->
+                    io:fwrite("Cookies match!~n", []),
+                    ok;
+                WrongCookie ->
+                    {error,
+                     {schema_cookie_mismatch,{WrongCookie,MyCookie}}}
+            catch
+                error:_ ->
+                    error(cannot_decode_cookie)
+            end
     end.
 
 insert_cookie(C, Cookie) ->
     Bin = term_to_binary(Cookie),
     InsertRes =
-	pgsql:equery(C, ("insert into schema (erlkey, erlval) values"
-			 " ('cookie', $1)"), [Bin]),
+        pgsql_connection:extended_query(("insert into schema (erlkey, erlval) values"
+                                        " ('cookie', $1)"), [Bin], C),
     io:fwrite("InsertRes = ~p~n", [InsertRes]),
     File = filename:join(mnesia_monitor:get_env(dir), "cookie.pg"),
     file:write_file(File, Bin),
     ok.
-    
+
 
 
 sql_transaction(_C, F) ->
-    %% pgsql:squery(C, "begin"),
+                                                % pgsql_connection:simple_query(C, "begin"),
     try  F()
-	 %% pgsql:squery(C, "commit")
+         %% pgsql_connection:simple_query(C, "commit")
     catch
-	error:E ->
-	    %% pgsql:squery(C, "rollback"),
-	    error(E);
-	exit:R ->
-	    %% pgsql:squery(C, "rollback"),
-	    exit(R);
-	throw:T ->
-	    %% pgsql:squery(C, "rollback"),
-	    throw(T)
+        error:E ->
+            %% pgsql_connection:simple_query(C, "rollback"),
+            error(E);
+        exit:R ->
+            %% pgsql_connection:simple_query(C, "rollback"),
+            exit(R);
+        throw:T ->
+            %% pgsql_connection:simple_query(C, "rollback"),
+            throw(T)
     end.
 
-	    
+
 
 sql_create_schema(H) ->
-    pgsql:squery(H, ("create table schema"
-		     " (erlkey character varying(64), erlval bytea)")).
+    pgsql_connection:simple_query(("create table schema"
+                                  " (erlkey character varying(64), erlval bytea)"), H).

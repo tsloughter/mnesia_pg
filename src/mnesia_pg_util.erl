@@ -18,12 +18,12 @@
 -module(mnesia_pg_util).
 
 -export([init_env/0,
-	 create/0,
-	 pg_dir/1,
-	 pg_bin/1,
-	 get_env/2,
-	 stop/0, stop/2,
-	 get_saved_port/0]).
+         create/0,
+         pg_dir/1,
+         pg_bin/1,
+         get_env/2,
+         stop/0, stop/2,
+         get_saved_port/0]).
 -export([clear_psql_db/0]).
 -export([test/0]).
 -export([ttest/0]).
@@ -41,30 +41,30 @@ init_env() ->
     Dir = mnesia_monitor:get_env(dir),
     PgDir = get_env(pg_dir, filename:join(Dir, "pgdata")),
     C = #conf{bin  = PgBin,
-	      dir  = PgDir,
-	      db   = Db,
-	      user = User,
-	      password = Pwd,
-	      pool_size = Pool},
+              dir  = PgDir,
+              db   = Db,
+              user = User,
+              password = Pwd,
+              pool_size = Pool},
     case filelib:is_dir(PgDir) of
-	false -> C#conf{status = not_installed,
-			port = get_port()};
-	true  -> pg_status(C)
+        false -> C#conf{status = not_installed,
+                       port = get_port()};
+        true  -> C %pg_status(C)
     end.
 
 clear_psql_db() ->
     case mnesia_lib:is_running() of
-	no ->
-	    application:load(mnesia),
-	    case init_env() of
-		#conf{status = running, was_running = true} = C ->
-		    psql_drop_all_tables(C),
-		    ok;
-		_ ->
-		    {error, postgres_not_running}
-	    end;
-	_ ->
-	    {error, mnesia_is_running}
+        no ->
+            application:load(mnesia),
+            case init_env() of
+                #conf{status = running, was_running = true} = C ->
+                    psql_drop_all_tables(C),
+                    ok;
+                _ ->
+                    {error, postgres_not_running}
+            end;
+        _ ->
+            {error, mnesia_is_running}
     end.
 
 pg_dir(#conf{dir = Dir}) ->
@@ -90,7 +90,9 @@ test() ->
 create() ->
     C = init_env(),
     io:fwrite("init_env() -> ~p~n", [C]),
-    ensure_running(C).
+    %% ensure_running(C).
+    C#conf{status=running,
+           was_running=true}.
 
 ensure_running(#conf{status = not_installed} = C) ->
     start_db(init_db(C));
@@ -100,22 +102,22 @@ ensure_running(#conf{status = running} = C) ->
     C.
 
 init_db(#conf{status = not_installed,
-	      bin = PgBin, dir = PgDir} = C) ->
+              bin = PgBin, dir = PgDir} = C) ->
     cmd([filename:join(PgBin,"initdb"), " -D ", PgDir]),
     C#conf{status = not_running}.
 
 start_db(#conf{status = not_running, dir = PgDir,
-	       port = Port, user = User, db = Db} = C) ->
+               port = Port, user = User, db = Db} = C) ->
     PortStr = integer_to_list(Port),
     PgLog = filename:join(mnesia_monitor:get_env(dir), "pglog"),
     Opts = "-i -h localhost -p " ++ PortStr,
     cmd([c("pg_ctl", C), " start -D ", PgDir, " -l ", PgLog,
-	 " -w -t 10 -o \"", Opts, "\""]),
+         " -w -t 10 -o \"", Opts, "\""]),
     CreateUser =
-	cmd([c("createuser",C), " -h localhost -p ", PortStr,
-	     " ", User]),
+        cmd([c("createuser",C), " -h localhost -p ", PortStr,
+             " ", User]),
     cmd([c("createdb",C), " -h localhost -p ", PortStr,
-	 " --owner=", User, " ", Db]),
+         " --owner=", User, " ", Db]),
     modify_user(CreateUser, C),
     save_port(Port),
     C#conf{status = running, was_running = false}.
@@ -124,12 +126,12 @@ modify_user(_, #conf{password = ""}) ->
     ok;
 modify_user(Res, #conf{user = User, password = Pwd} = C) ->
     case Res of
-	"createuser: " ++ _ = Err ->
-	    case re:run(Err, "already exists", []) of
-		{match, _} -> ok;
-		_ -> error({unknown_error, Err})
-	    end;
-	_ -> ok
+        "createuser: " ++ _ = Err ->
+            case re:run(Err, "already exists", []) of
+                {match, _} -> ok;
+                _ -> error({unknown_error, Err})
+            end;
+        _ -> ok
     end,
     psql(["alter role ", User, " with password '", Pwd, "';"], C).
 
@@ -141,22 +143,22 @@ modify_user(Res, #conf{user = User, password = Pwd} = C) ->
 psql(SQL, #conf{bin = PgBin, db = Db, host = Host, port = Port}) ->
     PortStr = integer_to_list(Port),
     cmd([filename:join(PgBin, "psql"), " -h ", Host, " -p ", PortStr,
-	 " -d ", Db, " -c \"", SQL, "\""]).
+         " -d ", Db, " -c \"", SQL, "\""]).
 
 psql_drop_all_tables(C) ->
     Tabs = psql_list_tables(C),
     io:fwrite("list_tables -> ~p~n", [Tabs]),
     [psql(["drop table if exists \"", T, "\" cascade"], C)
-     || T <- Tabs].
+    || T <- Tabs].
 
 psql_list_tables(#conf{bin = PgBin, db = Db, host = Host, port = Port}) ->
     PortStr = integer_to_list(Port),
     SQL = ("select table_name from information_schema.tables"
-	   " where table_schema='public'"),
+          " where table_schema='public'"),
     R = cmd([filename:join(PgBin, "psql"), " -h ", Host, " -p ", PortStr,
-	     " -d ", Db, " -t -c \"", SQL, "\""]),
+             " -d ", Db, " -t -c \"", SQL, "\""]),
     string:tokens(R, "\n\r\t\s").
-    
+
 
 c(Cmd, #conf{bin = Bin}) ->
     filename:join(Bin, Cmd).
@@ -175,12 +177,12 @@ cmd(Cmd0) ->
     L = erlang:min(length(Cmd), 50),
     Res = os:cmd(Cmd),
     io:fwrite("~s~n" ++ lists:duplicate(L, $-)
-	      ++ "~n~s~n", [Cmd, Res]),
+             ++ "~n~s~n", [Cmd, Res]),
     case Res of
-	"/bin/sh:" ++ _ ->
-	    error(script_error);
-	_ ->
-	    Res
+        "/bin/sh:" ++ _ ->
+            error(script_error);
+        _ ->
+            Res
     end.
 
 pg_status(#conf{bin = Bin, dir = Dir} = C) ->
@@ -196,23 +198,23 @@ parse_status("pg_ctl: server is running" ++ Rest, C) ->
     [_,Cmd|_] = re:split(Rest, "\\n", [{return,list}]),
     CmdS = re:replace(Cmd, "\\\"", "", [global]),
     case re:run(CmdS, "-i", []) of
-	{match,_} ->
-	    %% TCP enabled
-	    H = match1(re:run(CmdS, "-h[\\h]+([^\\h]+)", [{capture,[1],list}])),
-	    P = match1(re:run(CmdS, "-p[\\h]+([^\\h]+)", [{capture,[1],list}])),
-	    C#conf{status = running,
-		   host = H,
-		   port = list_to_integer(P),
-		   was_running = true};
-	nomatch ->
-	    error(inet_not_enabled)
+        {match,_} ->
+            %% TCP enabled
+            H = match1(re:run(CmdS, "-h[\\h]+([^\\h]+)", [{capture,[1],list}])),
+            P = match1(re:run(CmdS, "-p[\\h]+([^\\h]+)", [{capture,[1],list}])),
+            C#conf{status = running,
+                   host = H,
+                   port = list_to_integer(P),
+                   was_running = true};
+        nomatch ->
+            error(inet_not_enabled)
     end.
 
 if_not_running(#conf{status = not_running} = C) ->
     P = get_port(),
     H = get_env(pg_host, "localhost"),
     C#conf{host = H,
-	   port = P};
+           port = P};
 if_not_running(C) ->
     C.
 
@@ -221,31 +223,31 @@ match1(nomatch) -> undefined.
 
 get_env(K, Default) ->
     case application:get_env(mnesia_pg, K) of
-	{ok, Val} ->
-	    Val;
-	_ ->
-	    if is_function(Default, 0) -> Default();
-	       true -> Default
-	    end
+        {ok, Val} ->
+            Val;
+        _ ->
+            if is_function(Default, 0) -> Default();
+               true -> Default
+            end
     end.
 
 get_bin() ->
     RelPath = "pgsql/bin",
     case code:lib_dir(mnesia_pg) of
-	{error, bad_name} ->
-	    Dir = filename:join(
-		    filename:dirname(
-		      filename:dirname(
-			filename:absname(code:which(?MODULE)))), RelPath),
-	    case filelib:is_regular(
-		  filename:join(Dir, "psql")) of
-		false ->
-		    error(cannot_determine_bin_dir);
-		true ->
-		    Dir
-	    end;
-	Lib ->
-	    filename:join(Lib, RelPath)
+        {error, bad_name} ->
+            Dir = filename:join(
+                    filename:dirname(
+                      filename:dirname(
+                        filename:absname(code:which(?MODULE)))), RelPath),
+            case filelib:is_regular(
+                   filename:join(Dir, "psql")) of
+                false ->
+                    error(cannot_determine_bin_dir);
+                true ->
+                    Dir
+            end;
+        Lib ->
+            filename:join(Lib, RelPath)
     end.
 
 get_port() ->
@@ -268,8 +270,8 @@ save_port(Port) ->
 get_saved_port() ->
     Dir = mnesia_monitor:get_env(dir),
     case file:read_file(filename:join(Dir, "port_info.pg")) of
-	{ok, Bin} ->
-	    proplists:get_value(port, binary_to_term(Bin));
-	_ ->
-	    undefined
+        {ok, Bin} ->
+            proplists:get_value(port, binary_to_term(Bin));
+        _ ->
+            undefined
     end.
