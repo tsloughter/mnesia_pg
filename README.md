@@ -12,7 +12,7 @@ postgres=# \q
 ```
 
 ```erlang
-$ rebar3 shell
+$ rebar3 shell --sname mpg
 > application:ensure_all_started(pgsql).
 > ok = mnesia:create_schema([node()], [{backend_types,
                                           [{pg_copies,
