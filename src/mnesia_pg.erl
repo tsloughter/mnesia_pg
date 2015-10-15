@@ -916,7 +916,6 @@ fetch_next_n(N, {C, CursorName}) ->
 
 upsert_into(Alias, Tab0, PKey, SKey, Val) ->
     {C, Tab} = get_ref(Alias, Tab0),
-    io:format("Tab2 ~p~n", [Tab]),
     try
         {{insert,_,_}, _} = pgsql_connection:extended_query("insert into " ++ Tab ++ " (erlkey,erlhash,erlval,change_time) values ($1,$2,$3,CURRENT_TIMESTAMP)", [PKey,SKey,Val], C),
                                                 % ON CONFLICT DO UPDATE SET erlval=$3, erlhash=$2, change_time=CURRENT_TIMESTAMP
